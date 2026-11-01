@@ -1,5 +1,6 @@
 #include "modules/mgold/Render.h"
 #include "modules/mgold/Shader.h"
+#include "modules/mgold/Camera.h"
 
 #include "common/runtime.h"
 #include "common/Module.h"
@@ -22,13 +23,12 @@ static int w_render_finish(lua_State *L)
 	return 0;
 }
 
+// render.begin([shader])
 static int w_render_begin(lua_State *L)
 {
-	luaL_checktype(L, 1, LUA_TTABLE);
-
 	graphics::Shader *shader = nullptr;
-	if (lua_toboolean(L, 2))
-		shader = graphics::luax_checkshader(L, 2);
+	if (lua_toboolean(L, 1))
+		shader = graphics::luax_checkshader(L, 1);
 	else
 	{
 		MGOLD_pushDefaultShader(L);
@@ -38,33 +38,30 @@ static int w_render_begin(lua_State *L)
 
 	luax_catchexcept(L, [&]() { instance()->setShader(shader); });
 
-	lua_getfield(L, 1, "sendCameraMatrix");
-	if (!lua_isfunction(L, -1))
-		return luaL_error(L, "camera.sendCameraMatrix must be a function");
-	lua_call(L, 0, 0);
+	MGOLD_sendCameraMatrix(L);
 
 	instance()->setColor(Colorf(1.0f, 1.0f, 1.0f, 1.0f));
 	return 0;
 }
 
+// render.render(mesh)
 static int w_render_render(lua_State *L)
 {
-	luaL_checktype(L, 1, LUA_TTABLE); // camera
-	luaL_checktype(L, 2, LUA_TTABLE); // mesh
+	luaL_checktype(L, 1, LUA_TTABLE); // mesh
 
-	lua_getfield(L, 2, "visibleCount");
+	lua_getfield(L, 1, "visibleCount");
 	int count = lua_isnumber(L, -1) ? (int) lua_tointeger(L, -1) : 0;
 	lua_pop(L, 1);
 	if (count <= 0)
 		return 0;
 
 	graphics::Shader *customShader = nullptr;
-	lua_getfield(L, 2, "shader");
+	lua_getfield(L, 1, "shader");
 	if (lua_toboolean(L, -1))
 		customShader = graphics::luax_checkshader(L, -1);
 	lua_pop(L, 1);
 
-	lua_getfield(L, 2, "mesh");
+	lua_getfield(L, 1, "mesh");
 	graphics::Mesh *mesh = graphics::luax_checkmesh(L, -1);
 	lua_pop(L, 1);
 
@@ -74,10 +71,8 @@ static int w_render_render(lua_State *L)
 	{
 		luax_catchexcept(L, [&]() { instance()->setShader(customShader); });
 
-		lua_getfield(L, 1, "sendCameraMatrix");
-		if (!lua_isfunction(L, -1))
-			return luaL_error(L, "camera.sendCameraMatrix must be a function");
-		lua_call(L, 0, 0);
+		// shader novo: reenvia as matrizes
+		MGOLD_sendCameraMatrix(L);
 	}
 
 	instance()->setColor(Colorf(1.0f, 1.0f, 1.0f, 1.0f));

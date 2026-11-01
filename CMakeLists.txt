@@ -562,6 +562,22 @@ add_library(love_mgold_root STATIC
 	src/modules/mgold/Matrices.h
 	src/modules/mgold/Collisions.cpp
 	src/modules/mgold/Collisions.h
+	src/modules/mgold/CollisionCore.h
+	src/modules/mgold/Vectors.cpp
+	src/modules/mgold/Vectors.h
+	src/modules/mgold/Physics.cpp
+	src/modules/mgold/Physics.h
+	src/modules/mgold/Camera.cpp
+	src/modules/mgold/Camera.h
+	src/modules/mgold/Light.cpp
+	src/modules/mgold/Light.h
+	src/modules/mgold/Shaderbridge.h
+	src/modules/mgold/ObjLoader.cpp
+	src/modules/mgold/ObjLoader.h
+	src/modules/mgold/Object.cpp
+	src/modules/mgold/Object.h
+	src/modules/mgold/Player.cpp
+	src/modules/mgold/Player.h
 	src/modules/mgold/wrap_mgold.h
 	src/modules/mgold/wrap_mgold.cpp
 )
