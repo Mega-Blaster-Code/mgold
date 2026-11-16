@@ -7,7 +7,6 @@ namespace love{
 
 namespace mgold{
 
-// empilha a funcao objloader(path [, uFlip [, vFlip]]) -> tabela de vertices
 void MGOLD_setObjLoaderFunc(lua_State *L);
 
 }

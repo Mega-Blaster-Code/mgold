@@ -9,12 +9,13 @@ namespace mgold
 
 void MGOLD_setCameraFunc(lua_State *L);
 
-// acesso nativo (Player.cpp): move a camera mantendo direcao/pitch, le yaw e vetor de olhar
 void MGOLD_cameraSetPosition(double x, double y, double z);
 double MGOLD_cameraYaw();
 void MGOLD_cameraLookVector(double &x, double &y, double &z);
+bool MGOLD_cameraLineOffset(double x, double y, double z, double dx, double dy, double dz,
+                            double lineWidth, double viewportHeight,
+                            double &offsetX, double &offsetY, double &offsetZ);
 
-// envia as matrizes da camera ao shader atual (so o que mudou)
 void MGOLD_sendCameraMatrix(lua_State *L);
 
 }

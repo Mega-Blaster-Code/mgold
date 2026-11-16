@@ -223,6 +223,17 @@ function love.init()
 			video = true,
 			mgold = true,
 		},
+		mgold = {
+            config = {
+				printf = true,
+			},
+            modules = {
+                string = true,
+                stdlib = true,
+                engine = true,
+                player = true,
+            },
+        },
 		audio = {
 			mixwithsystem = true, -- Only relevant for Android / iOS.
 			mic = false, -- Only relevant for Android.
@@ -344,6 +355,10 @@ function love.init()
 	if love._requestRecordingPermission then
 		love._requestRecordingPermission(c.audio and c.audio.mic)
 	end
+
+	love._isMGOLD = true
+
+	love._conf = c
 
 	-- Gets desired modules.
 	for k,v in ipairs{

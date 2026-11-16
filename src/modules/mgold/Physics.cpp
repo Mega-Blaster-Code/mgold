@@ -664,6 +664,56 @@ static int w_newBody(lua_State *L)
 	return 1;
 }
 
+static int w_bodyGetPosition(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	pushVecField(L, 1, K_POSITION);
+	double p[3];
+	readVec3(L, lua_gettop(L), p);
+	lua_pop(L, 1);
+	lua_pushnumber(L, p[0]);
+	lua_pushnumber(L, p[1]);
+	lua_pushnumber(L, p[2]);
+	return 3;
+}
+
+static int w_bodySetPosition(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	pushVecField(L, 1, K_POSITION);
+	int position = lua_gettop(L);
+	setNum(L, position, K_X, luaL_checknumber(L, 2));
+	setNum(L, position, K_Y, luaL_checknumber(L, 3));
+	setNum(L, position, K_Z, luaL_checknumber(L, 4));
+	lua_pop(L, 1);
+	return 0;
+}
+
+static int w_bodyGetVelocity(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	pushVecField(L, 1, K_SPEED);
+	double v[3];
+	readVec3(L, lua_gettop(L), v);
+	lua_pop(L, 1);
+	lua_pushnumber(L, v[0]);
+	lua_pushnumber(L, v[1]);
+	lua_pushnumber(L, v[2]);
+	return 3;
+}
+
+static int w_bodySetVelocity(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	pushVecField(L, 1, K_SPEED);
+	int speed = lua_gettop(L);
+	setNum(L, speed, K_X, luaL_checknumber(L, 2));
+	setNum(L, speed, K_Y, luaL_checknumber(L, 3));
+	setNum(L, speed, K_Z, luaL_checknumber(L, 4));
+	lua_pop(L, 1);
+	return 0;
+}
+
 static int w_destroy(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -1165,6 +1215,10 @@ void MGOLD_setPhysicsFunc(lua_State *L)
 	struct Entry { const char *name; lua_CFunction fn; };
 	static const Entry bodyFuncs[] = {
 		{ "destroy", w_destroy },
+		{ "getPosition", w_bodyGetPosition },
+		{ "setPosition", w_bodySetPosition },
+		{ "getVelocity", w_bodyGetVelocity },
+		{ "setVelocity", w_bodySetVelocity },
 		{ "collisionTest", w_collisionTest },
 		{ "moveAndSlide", w_moveAndSlide },
 		{ "updatePhysics", w_updatePhysics },

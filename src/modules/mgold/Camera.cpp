@@ -1,5 +1,6 @@
 #include "modules/mgold/Camera.h"
 #include "modules/mgold/ShaderBridge.h"
+#include "modules/mgold/Shader.h"
 
 #include "common/Module.h"
 #include "modules/graphics/Graphics.h"
@@ -11,8 +12,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Se o seu LOVE for o 12.x, defina MGOLD_LOVE12 (Graphics::getRenderTargets em vez de getCanvas).
-
 namespace love
 {
 namespace mgold
@@ -20,10 +19,6 @@ namespace mgold
 
 namespace
 {
-
-// ---------------------------------------------------------------------------------------------
-// Estado da camera: tudo nativo, o Lua so e tocado ao enviar matrizes (quando mudaram).
-// ---------------------------------------------------------------------------------------------
 
 struct Vec3{ double x, y, z; };
 
@@ -36,26 +31,24 @@ const double PI = 3.14159265358979323846;
 
 CamState cam = {PI / 2, 0.01, 100.0, 1.0, {0, 0, 0}, {0, 0, 1}, {0, 1, 0}};
 
-double direction = 0.0; // fpsController.direction
-double pitch = 0.0;     // fpsController.pitch
+double direction = 0.0;
+double pitch = 0.0;
 
 double viewM[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
 double projM[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
 
 bool viewDirty = true;
 bool projDirty = true;
-bool matrixSent = false;
+int canvasSent = -1;
+unsigned shaderGen = 0;
 bool aspectReady = false;
+bool orthographicProjection = false;
+double orthographicSize = 5.0;
 
 std::unordered_map<std::string, CamState> saves;
 
-// tabelas Lua (criadas por matrices.newMatrix) so para enviar ao shader
 int viewRef = LUA_NOREF;
 int projRef = LUA_NOREF;
-
-// ---------------------------------------------------------------------------------------------
-// utilidades
-// ---------------------------------------------------------------------------------------------
 
 inline void normalize(double &x, double &y, double &z){
 	double len = std::sqrt(x * x + y * y + z * z);
@@ -82,17 +75,12 @@ double windowAspect(){
 	return (w > 0 && h > 0) ? w / h : cam.aspect;
 }
 
-// o Graphics ainda nao existe quando o modulo abre, entao o aspect e resolvido na primeira vez
 inline void ensureAspect(){
 	if (!aspectReady){
 		cam.aspect = windowAspect();
 		aspectReady = true;
 	}
 }
-
-// ---------------------------------------------------------------------------------------------
-// matrizes (mesmo layout de Matrices.cpp: indices 0-based, translacao em 3, 7, 11)
-// ---------------------------------------------------------------------------------------------
 
 void buildView(){
 	double z1 = cam.pos.x - cam.target.x, z2 = cam.pos.y - cam.target.y, z3 = cam.pos.z - cam.target.z;
@@ -142,19 +130,14 @@ void buildOrthographic(double size){
 void updateProjection(){
 	ensureAspect();
 	buildProjection();
+	orthographicProjection = false;
 	projDirty = true;
-	matrixSent = false;
 }
 
 void updateView(){
 	buildView();
 	viewDirty = true;
-	matrixSent = false;
 }
-
-// ---------------------------------------------------------------------------------------------
-// logica de camera
-// ---------------------------------------------------------------------------------------------
 
 void getLook(double &vx, double &vy, double &vz){
 	vx = cam.target.x - cam.pos.x;
@@ -177,7 +160,6 @@ void lookAt(double x, double y, double z, double ax, double ay, double az){
 	updateView();
 }
 
-// ponteiros nulos = "manter o valor atual" (equivale aos argumentos nil do Lua)
 void lookInDirection(const double *x, const double *y, const double *z, const double *dir, const double *pit){
 	if (x) cam.pos.x = *x;
 	if (y) cam.pos.y = *y;
@@ -193,10 +175,6 @@ void lookInDirection(const double *x, const double *y, const double *z, const do
 	updateProjection();
 	updateView();
 }
-
-// ---------------------------------------------------------------------------------------------
-// input (LOVE nativo, sem passar pelo Lua)
-// ---------------------------------------------------------------------------------------------
 
 struct Keys{
 	std::vector<love::keyboard::Keyboard::Key> w, a, s, d, space, lshift;
@@ -216,10 +194,6 @@ void initKeys(){
 	if (Keyboard::getConstant("lshift", k)) keys.lshift.push_back(k);
 	keys.ready = true;
 }
-
-// ---------------------------------------------------------------------------------------------
-// envio ao shader
-// ---------------------------------------------------------------------------------------------
 
 void pushMatrixTable(lua_State *L, int &ref, const double *m){
 	if (ref == LUA_NOREF){
@@ -242,12 +216,8 @@ bool renderingToCanvas(){
 	auto *gfx = Module::getInstance<love::graphics::Graphics>(Module::M_GRAPHICS);
 	if (!gfx)
 		return false;
-	return !gfx->getRenderTargets().colors.empty();
+	return gfx->isRenderTargetActive();
 }
-
-// ---------------------------------------------------------------------------------------------
-// bindings
-// ---------------------------------------------------------------------------------------------
 
 int w_save(lua_State *L){
 	const char *name = luaL_checkstring(L, 1);
@@ -284,23 +254,36 @@ int w_isRenderingToCanvas(lua_State *L){
 	return 1;
 }
 
-int w_sendCameraMatrix(lua_State *L){
-	if (matrixSent)
-		return 0;
-	matrixSent = true;
+void syncUniforms(lua_State *L){
+	DefaultUniforms &u = MGOLD_defaultUniforms(L);
 
-	// uniforms persistem no shader: so reenvia as matrizes que mudaram
-	if (viewDirty){
-		pushMatrixTable(L, viewRef, viewM);
-		bridge::sendTop(L, "viewMatrix");
-		viewDirty = false;
+	if (u.generation != shaderGen){
+		shaderGen = u.generation;
+		viewDirty = projDirty = true;
+		canvasSent = -1;
 	}
-	if (projDirty){
-		pushMatrixTable(L, projRef, projM);
-		bridge::sendTop(L, "projectionMatrix");
-		projDirty = false;
-	}
-	bridge::sendBool(L, "isCanvasEnabled", renderingToCanvas());
+
+	int canvas = renderingToCanvas() ? 1 : 0;
+	if (!viewDirty && !projDirty && canvas == canvasSent)
+		return;
+	luax_catchexcept(L, [&]() {
+		if (viewDirty){
+			bridge::setMat4RowMajor(u.shader, u.view, viewM);
+			viewDirty = false;
+		}
+		if (projDirty){
+			bridge::setMat4RowMajor(u.shader, u.proj, projM);
+			projDirty = false;
+		}
+		if (canvas != canvasSent){
+			bridge::setBool(u.shader, u.canvas, canvas != 0);
+			canvasSent = canvas;
+		}
+	});
+}
+
+int w_sendCameraMatrix(lua_State *L){
+	syncUniforms(L);
 	return 0;
 }
 
@@ -356,9 +339,10 @@ int w_resize(lua_State *L){
 
 int w_updateOrthographicMatrix(lua_State *L){
 	ensureAspect();
-	buildOrthographic(luaL_optnumber(L, 1, 5));
+	orthographicSize = luaL_optnumber(L, 1, 5);
+	buildOrthographic(orthographicSize);
+	orthographicProjection = true;
 	projDirty = true;
-	matrixSent = false;
 	return 0;
 }
 
@@ -414,12 +398,12 @@ int w_firstPersonLook(lua_State *L){
 	return 0;
 }
 
+
 int w_update(lua_State *){
-	matrixSent = false;
 	return 0;
 }
 
-// ---- acesso ao estado que antes era campo da tabela camera (camera.position[1], camera.fov...) ----
+
 
 int w_getPosition(lua_State *L){
 	lua_pushnumber(L, cam.pos.x); lua_pushnumber(L, cam.pos.y); lua_pushnumber(L, cam.pos.z);
@@ -461,9 +445,8 @@ int w_getAspectRatio(lua_State *L){ ensureAspect(); lua_pushnumber(L, cam.aspect
 int w_getViewMatrix(lua_State *L){ pushMatrixTable(L, viewRef, viewM); return 1; }
 int w_getProjectionMatrix(lua_State *L){ pushMatrixTable(L, projRef, projM); return 1; }
 
-} // namespace
+}
 
-// ---- acesso nativo para outros modulos (Player.cpp) ----
 void MGOLD_cameraSetPosition(double x, double y, double z){
 	lookInDirection(&x, &y, &z, nullptr, nullptr);
 }
@@ -476,9 +459,44 @@ void MGOLD_cameraLookVector(double &x, double &y, double &z){
 	getLook(x, y, z);
 }
 
-// chamada direta de C++ (Render.cpp), sem passar pelo Lua
+bool MGOLD_cameraLineOffset(double x, double y, double z, double dx, double dy, double dz,
+                            double lineWidth, double viewportHeight,
+                            double &offsetX, double &offsetY, double &offsetZ){
+	if (lineWidth <= 0.0 || viewportHeight <= 0.0 || !std::isfinite(lineWidth))
+		return false;
+
+	double forwardX, forwardY, forwardZ;
+	getLook(forwardX, forwardY, forwardZ);
+	if (forwardX == 0.0 && forwardY == 0.0 && forwardZ == 0.0)
+		return false;
+
+	double sideX, sideY, sideZ;
+	cross(dx, dy, dz, forwardX, forwardY, forwardZ, sideX, sideY, sideZ);
+	double sideLength = std::sqrt(sideX * sideX + sideY * sideY + sideZ * sideZ);
+	if (sideLength <= 1e-12){
+		cross(cam.up.x, cam.up.y, cam.up.z, -forwardX, -forwardY, -forwardZ,
+		      sideX, sideY, sideZ);
+		sideLength = std::sqrt(sideX * sideX + sideY * sideY + sideZ * sideZ);
+	}
+	if (sideLength <= 1e-12)
+		return false;
+
+	const double depth = (x - cam.pos.x) * forwardX +
+	                     (y - cam.pos.y) * forwardY +
+	                     (z - cam.pos.z) * forwardZ;
+	if (!orthographicProjection && depth <= cam.nearClip)
+		return false;
+
+	const double projectionDistance = orthographicProjection ? orthographicSize : depth;
+	const double halfWidth = lineWidth * projectionDistance * std::tan(cam.fov / 2.0) / viewportHeight;
+	offsetX = sideX / sideLength * halfWidth;
+	offsetY = sideY / sideLength * halfWidth;
+	offsetZ = sideZ / sideLength * halfWidth;
+	return std::isfinite(offsetX) && std::isfinite(offsetY) && std::isfinite(offsetZ);
+}
+
 void MGOLD_sendCameraMatrix(lua_State *L){
-	w_sendCameraMatrix(L);
+	syncUniforms(L);
 }
 
 void MGOLD_setCameraFunc(lua_State *L){

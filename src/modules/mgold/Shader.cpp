@@ -200,6 +200,12 @@ static int w_shader_load(lua_State *L)
 	}
 }
 
+namespace
+{
+DefaultUniforms defaults;      // so ponteiros: o dono do shader e o registry do Lua
+unsigned generationCounter = 0;
+}
+
 void MGOLD_pushDefaultShader(lua_State *L)
 {
 	lua_getfield(L, LUA_REGISTRYINDEX, DEFAULT_SHADER_KEY);
@@ -233,6 +239,39 @@ void MGOLD_pushDefaultShader(lua_State *L)
 
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, DEFAULT_SHADER_KEY);
+}
+
+DefaultUniforms &MGOLD_defaultUniforms(lua_State *L)
+{
+	if (defaults.shader != nullptr)
+		return defaults;
+
+	MGOLD_pushDefaultShader(L);
+	graphics::Shader *sh = graphics::luax_checkshader(L, -1);
+	lua_pop(L, 1); // o registry continua dono
+
+	defaults.shader = sh;
+	defaults.view = sh->getUniformInfo("viewMatrix");
+	defaults.proj = sh->getUniformInfo("projectionMatrix");
+	defaults.canvas = sh->getUniformInfo("isCanvasEnabled");
+	defaults.fogStart = sh->getUniformInfo("fogStart");
+	defaults.fogEnd = sh->getUniformInfo("fogEnd");
+	defaults.fogColor = sh->getUniformInfo("fogColor");
+	defaults.globalLight = sh->getUniformInfo("globalLight");
+	defaults.sunDir = sh->getUniformInfo("sunDirToLight");
+	defaults.generation = ++generationCounter;
+	return defaults;
+}
+
+unsigned MGOLD_defaultGeneration()
+{
+	return defaults.shader != nullptr ? defaults.generation : 0;
+}
+
+void MGOLD_resetDefaultShader()
+{
+	defaults = DefaultUniforms();
+	++generationCounter; // invalida quem guardou a geracao anterior
 }
 
 static int w_shader_default_get(lua_State *L)

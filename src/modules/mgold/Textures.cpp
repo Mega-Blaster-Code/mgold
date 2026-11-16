@@ -111,7 +111,7 @@ void MGOLD_setTextureFunc(lua_State *L){
 	lua_setfield(L, -2, "textures");
 
 	lua_pushcfunction(L, w_loadTextures);
-	lua_setfield(L, -2, "loadTextures");
+	lua_setfield(L, -2, "load");
 
 	lua_pushcfunction(L, w_getTexture);
 	lua_setfield(L, -2, "get");

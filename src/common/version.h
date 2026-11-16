@@ -25,7 +25,7 @@ namespace love
 {
 
 // Version stuff.
-#define LOVE_VERSION_STRING "12.0 meg2"
+#define LOVE_VERSION_STRING "12.0 MGOLD 0.6"
 static const int VERSION_MAJOR = 12;
 static const int VERSION_MINOR = 0;
 static const int VERSION_REV = 0;

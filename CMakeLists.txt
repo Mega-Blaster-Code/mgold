@@ -578,6 +578,22 @@ add_library(love_mgold_root STATIC
 	src/modules/mgold/Object.h
 	src/modules/mgold/Player.cpp
 	src/modules/mgold/Player.h
+	src/modules/mgold/Stdlib.cpp
+	src/modules/mgold/Stdlib.h
+	src/modules/mgold/Network.cpp
+	src/modules/mgold/Network.h
+	src/modules/mgold/NetCore.lua
+	src/modules/mgold/NetSession.lua
+	src/modules/mgold/NetUpdate.lua
+	src/modules/mgold/NetPlayers.lua
+	src/modules/mgold/NetScoreboard.lua
+	src/modules/mgold/NetPlayerSync.lua
+	src/modules/mgold/NetMessaging.lua
+	src/modules/mgold/NetTeamsModesVoice.lua
+	src/modules/mgold/NetModeration.lua
+	src/modules/mgold/NetBootstrap.lua
+	src/modules/mgold/Tab.cpp
+	src/modules/mgold/Tab.h
 	src/modules/mgold/wrap_mgold.h
 	src/modules/mgold/wrap_mgold.cpp
 )
